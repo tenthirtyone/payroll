@@ -1,6 +1,9 @@
-const BigNumber = web3.BigNumber
+import { increaseTimeTo, duration } from './helpers/increaseTime';
+import assertRevert, { assertError } from './helpers/assertRevert'
 
+const BigNumber = web3.BigNumber
 const ANTPayroll = artifacts.require('ANTPayroll')
+const TokenERC20 = artifacts.require('TokenERC20')
 
 require('chai')
   .use(require('chai-as-promised'))
@@ -9,30 +12,40 @@ require('chai')
 
 const expect = require('chai').expect
 
-contract('Payroll Test', accounts => {
+contract('Payroll Test', async (accounts) => {
+  await increaseTimeTo(Date.now());
+  let payroll = null;
+
+  let token1 = await TokenERC20.new(10 * 10e28, 'USD Token', 'USD');
+  let token2 = await TokenERC20.new(10 * 10e28, 'Token 2', 'Tkn2');
+  let token3 = await TokenERC20.new(10 * 10e28, 'Token 3', 'Tkn3');
+
+  const oneContractMonth = 2592000;
+  const oneMonth = 2592000;
   const [creator, user, anotherUser, oracle, mallory] = accounts
-  const addresses = [
-    '0x281055afc982d96fab65b3a49cac8b878184cb16',
-    '0x6f46cf5569aefa1acc1009290c8e043747172d89',
-    '0x90e63c3d53e0ea496845b7a03ec7548b70014a91',
-    '0xab7c74abc0c4d48d1bdad5dcb26153fc8780f83e'
-  ]
 
-  const [Tkn1, Tkn2, Tkn3, Tkn4] = addresses;
+  // Token USD Exchange Rates
+  const ethExchange  = 1000; // 1000 USD = 1 Eth
+  const tknExchange1 = 1;
+  const tknExchange2 = 10;
+  const tknExchange3 = 100;
 
-  let payroll = null
+  const seedFund = 1000 * 10e18; // Eth seed fund
 
-  const oneTkn1 = 1 * 10e10;
-  const oneTkn2 = 92 * 10e10;
-  const oneTkn3 = 531 * 10e10;
-  const oneTkn4 = 123 * 10e10;
+  const yearlySalary = 100 * 10e18; // Salary in USD
 
-  const oneEth = 10 * 10e18;
-  const yearlySalary = 400000;
+  const fromOracle = {
+    from: oracle
+  };
 
   beforeEach(async () => {
     payroll = await ANTPayroll.new(oracle);
-    await payroll.addEmployee(creator, [user, anotherUser], yearlySalary);
+    await payroll.addEmployee(creator, [token1.address, token2.address], yearlySalary);
+
+    await payroll.setExchangeRate(payroll.address, ethExchange, fromOracle);
+    await payroll.setExchangeRate(token1.address, tknExchange1, fromOracle);
+    await payroll.setExchangeRate(token2.address, tknExchange2, fromOracle);
+    await payroll.setExchangeRate(token3.address, tknExchange3, fromOracle);
   })
 
   describe('Owner Functions', () => {
@@ -41,7 +54,7 @@ contract('Payroll Test', accounts => {
 
       emp[0].should.be.equal(creator);
     })
-    it('Sets an employees salary', async () => {
+    it('Sets an employee salary', async () => {
       await payroll.setEmployeeSalary(0, 5000);
 
       const emp = await payroll.getEmployee(0);
@@ -53,21 +66,21 @@ contract('Payroll Test', accounts => {
 
       const emp = await payroll.getEmployee(0);
 
-      emp[2].should.be.equal(false);
+      emp[3].should.be.equal(false);
     })
     it('Adds funds to the contract', async () => {
-      await payroll.addFunds({ value: oneEth });
+      await payroll.addFunds({ value: seedFund });
 
       const balance = await payroll._balance();
 
-      balance.should.be.bignumber.equal(oneEth);
+      balance.should.be.bignumber.equal(seedFund);
     })
     it('Runs off with the money (scapeHatch)', async () => {
-      await payroll.addFunds({ value: oneEth });
+      await payroll.addFunds({ value: seedFund });
 
       let balance = await payroll._balance();
 
-      balance.should.be.bignumber.equal(oneEth);
+      balance.should.be.bignumber.equal(seedFund);
       const oldBalance = await web3.eth.getBalance(creator);
 
       await payroll.scapeHatch(creator);
@@ -93,28 +106,73 @@ contract('Payroll Test', accounts => {
       emp[0].should.be.equal(creator);
     })
     it('Calculates the burn rate', async () => {
-      await payroll.addEmployee(user, [user, anotherUser], yearlySalary);
+      await payroll.addEmployee(user, [user, anotherUser], yearlySalary*11);
       await payroll.addEmployee(anotherUser, [user, anotherUser], yearlySalary);
+      await payroll.removeEmployee(2);
 
       const burnRate = await payroll.calculatePayrollBurnrate();
 
-      burnRate.should.be.bignumber.equal(yearlySalary * 3 / 12);
+      burnRate.should.be.bignumber.equal(yearlySalary);
     })
     it('Calculates the runway', async () => {
+      let runway = await payroll.calculatePayrollRunway();
 
+      runway.should.be.bignumber.equal(0);
+
+      await payroll.addFunds({ value: yearlySalary });
+
+      runway = await payroll.calculatePayrollRunway();
+
+      runway.should.be.bignumber.equal(365);
+    })
+  })
+
+  describe('Employee Functions', () => {
+    beforeEach(async () => {
+      await payroll.addFunds({ value: yearlySalary });
+    })
+
+    it('Calls the payday function after 30 days', async () => {
+      await increaseTimeTo(Date.now() + duration.days(30));
+      let emp = await payroll.getEmployee(0);
+      const lastPayday = emp[2].toNumber()
+
+      const oldBalance = await web3.eth.getBalance(creator);
+
+      await payroll.payday();
+
+      const newBalance = await web3.eth.getBalance(creator);
+
+      // This test may fail if exchange rates or pay is very low. E.g.
+      // User spent more on TX fee than getting paid. Not a problem
+      // with this coin so much.
+      newBalance.should.be.bignumber.gt(oldBalance);
+
+      emp = await payroll.getEmployee(0);
+
+      emp[2].should.be.bignumber.equal(lastPayday + oneContractMonth);
+      await assertRevert(payroll.payday());
+    })
+    it('Time Travels three months and calls payday three times', async () => {
+      // 120 Because of the 30 days above + 90 for three months
+      await increaseTimeTo(Date.now() + duration.days(120));
+
+      await payroll.payday();
+      await payroll.payday();
+      await payroll.payday();
+      await assertRevert(payroll.payday());
     })
   })
 
   describe('Oracle Functions', () => {
-    beforeEach(async () => {
-      payroll.setExchangeRate(Tkn1, oneTnk1);
-      payroll.setExchangeRate(Tkn2, oneTnk2);
-      payroll.setExchangeRate(Tkn3, oneTnk3);
-      payroll.setExchangeRate(Tkn4, oneTnk4);
-    })
-
     it('Sets Exchange Rates', async () => {
+      const tkn1 = await payroll.getExchangeRate(token1.address);
+      const tkn2 = await payroll.getExchangeRate(token2.address);
+      const tkn3 = await payroll.getExchangeRate(token3.address);
 
+      tkn1.should.be.bignumber.equal(tknExchange1);
+      tkn2.should.be.bignumber.equal(tknExchange2);
+      tkn3.should.be.bignumber.equal(tknExchange3);
     })
   })
 })
