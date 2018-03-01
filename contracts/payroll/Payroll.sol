@@ -31,17 +31,17 @@ contract Payroll is Ownable {
     _;
   }
 
-  function addEmployee(address _accountAddress, address[] _allowedTokens, uint256 _initialYearlyUSDSalary) onlyOwner {
+  function addEmployee(address accountAddress, address[] allowedTokens, uint256 initialYearlyUSDSalary) onlyOwner {
     Employee memory _employee = Employee({
-      accountAddress: _accountAddress,
-      allowedTokens: _allowedTokens,
-      yearlyUSDSalary: _initialYearlyUSDSalary,
+      accountAddress: accountAddress,
+      allowedTokens: allowedTokens,
+      yearlyUSDSalary: initialYearlyUSDSalary,
       nextPayday: block.timestamp + oneMonth,
       active: true
     });
 
     _employees.push(_employee);
-    _isEmployee[_accountAddress] = true;
+    _isEmployee[accountAddress] = true;
   }
 
   function setEmployeeSalary(uint256 employeeId, uint256 yearlyUSDSalary) onlyOwner {
@@ -57,8 +57,8 @@ contract Payroll is Ownable {
     _balance += msg.value;
   }
 
-  function scapeHatch(address yoinks) onlyOwner {
-    selfdestruct(yoinks);
+  function scapeHatch() onlyOwner {
+    selfdestruct(msg.sender);
   }
 
   function getEmployeeCount() constant returns (uint256) {
@@ -76,24 +76,24 @@ contract Payroll is Ownable {
   function calculatePayrollBurnrate() constant returns (uint256) {
     return _totalPay() / 12;
   }
-  // Factor in Eth USD exchange rate
-  function calculatePayrollRunway() constant returns (uint256) {
-    return _balance / (_totalPay() / 365);
-  }
 
+  function calculatePayrollRunway() constant returns (uint256) {
+    uint256 ethExchange = _exchangeRates[this];
+    return (_balance * ethExchange) / (_totalPay() / 365);
+  }
 
   /*
    * Pays out contract balance in Ether based on USD exchange rate
    **/
   function payday() public onlyEmployee {
-    uint256 _employeeId = addressToId[msg.sender];
-    uint256 nextPayday = _employees[_employeeId].nextPayday;
+    uint256 employeeId = addressToId[msg.sender];
+    uint256 nextPayday = _employees[employeeId].nextPayday;
     uint256 currentDay = block.timestamp;
 
     require(currentDay >= nextPayday);
-    _employees[_employeeId].nextPayday += oneMonth;
+    _employees[employeeId].nextPayday += oneMonth;
 
-    uint256 monthlyPay = _employees[_employeeId].yearlyUSDSalary / 12;
+    uint256 monthlyPay = _employees[employeeId].yearlyUSDSalary / 12;
     uint256 usdExchange = _exchangeRates[this];
 
     msg.sender.transfer(monthlyPay / usdExchange);

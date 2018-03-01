@@ -1,5 +1,7 @@
 pragma solidity ^0.4.19;
 
+import './ContractReceiver.sol';
+
 interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) public; }
 
 contract TokenERC20 {
@@ -67,6 +69,13 @@ contract TokenERC20 {
      */
     function transfer(address _to, uint256 _value) public {
         _transfer(msg.sender, _to, _value);
+    }
+
+    function transferToContract(address _to, uint _value, bytes _data) public returns (bool success) {
+        transfer(_to, _value);
+        ContractReceiver receiver = ContractReceiver(_to);
+        receiver.tokenFallback(msg.sender, _value, _data);
+        return true;
     }
 
     /**

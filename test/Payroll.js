@@ -2,7 +2,8 @@ import { increaseTimeTo, duration } from './helpers/increaseTime';
 import assertRevert, { assertError } from './helpers/assertRevert'
 
 const BigNumber = web3.BigNumber
-const ANTPayroll = artifacts.require('ANTPayroll')
+const ANTPayroll = artifacts.require('ANTTokenPayroll')
+const ANTTokenPayroll = artifacts.require('ANTTokenPayroll')
 const TokenERC20 = artifacts.require('TokenERC20')
 
 require('chai')
@@ -15,6 +16,7 @@ const expect = require('chai').expect
 contract('Payroll Test', async (accounts) => {
   await increaseTimeTo(Date.now());
   let payroll = null;
+  let tokenPayroll = null;
 
   let token1 = await TokenERC20.new(10 * 10e28, 'USD Token', 'USD');
   let token2 = await TokenERC20.new(10 * 10e28, 'Token 2', 'Tkn2');
@@ -40,6 +42,8 @@ contract('Payroll Test', async (accounts) => {
 
   beforeEach(async () => {
     payroll = await ANTPayroll.new(oracle);
+    tokenPayroll = await ANTTokenPayroll.new(oracle);
+
     await payroll.addEmployee(creator, [token1.address, token2.address], yearlySalary);
 
     await payroll.setExchangeRate(payroll.address, ethExchange, fromOracle);
@@ -83,7 +87,7 @@ contract('Payroll Test', async (accounts) => {
       balance.should.be.bignumber.equal(seedFund);
       const oldBalance = await web3.eth.getBalance(creator);
 
-      await payroll.scapeHatch(creator);
+      await payroll.scapeHatch();
 
       const newBalance = await web3.eth.getBalance(creator);
       balance = await payroll._balance();
@@ -123,7 +127,7 @@ contract('Payroll Test', async (accounts) => {
 
       runway = await payroll.calculatePayrollRunway();
 
-      runway.should.be.bignumber.equal(365);
+      runway.should.be.bignumber.equal(365 * ethExchange);
     })
   })
 
@@ -173,6 +177,72 @@ contract('Payroll Test', async (accounts) => {
       tkn1.should.be.bignumber.equal(tknExchange1);
       tkn2.should.be.bignumber.equal(tknExchange2);
       tkn3.should.be.bignumber.equal(tknExchange3);
+    })
+  })
+
+  /*
+   * Deserves it's own file. I got ahead of myself
+   */
+
+  describe('Token Payroll Functions', () => {
+    beforeEach(async () => {
+      await tokenPayroll.addEmployee(mallory, [token1.address, token2.address], yearlySalary);
+
+      await tokenPayroll.setExchangeRate(payroll.address, ethExchange, fromOracle);
+      await tokenPayroll.setExchangeRate(token1.address, tknExchange1, fromOracle);
+      await tokenPayroll.setExchangeRate(token2.address, tknExchange2, fromOracle);
+      await tokenPayroll.setExchangeRate(token3.address, tknExchange3, fromOracle);
+
+      await token1.transferToContract(tokenPayroll.address, yearlySalary * 10, '');
+      await token2.transferToContract(tokenPayroll.address, yearlySalary * 10, '');
+    })
+    it('Increases the count of employees accepting a token', async () => {
+      const tokenCount = await tokenPayroll.allowedTokenCount(token1.address);
+      tokenCount.should.be.bignumber.equal(1);
+    })
+    it('Decreases the count of employees accepting a token after removing an employee', async () => {
+      // Sorry Mallory
+      await tokenPayroll.removeEmployee(0);
+      const tokenCount = await tokenPayroll.allowedTokenCount(token1.address);
+      tokenCount.should.be.bignumber.equal(0);
+    })
+    it('Receives tokens employees want', async () => {
+      const contractBalance = await token1.balanceOf(tokenPayroll.address);
+      const payrollBalance = await tokenPayroll.tokenBalance(token1.address);
+
+      contractBalance.should.be.bignumber.equal(payrollBalance);
+    })
+    it('Rejects tokens from contracts no one wants', async () => {
+      await assertRevert(token3.transferToContract(tokenPayroll.address, 10000, ''));
+    })
+    it('Pays out tokens on payday', async () => {
+      await increaseTimeTo(Date.now() + duration.days(150));
+
+      const balanceBefore = await token2.balanceOf(mallory);
+      await tokenPayroll.tokenPayday(token2.address, {from: mallory});
+      const balanceAfter = await token2.balanceOf(mallory);
+
+      const monthlySalary = Math.round(yearlySalary / tknExchange2 / 12);
+      const currentBalance = balanceAfter.toNumber();
+
+      currentBalance.should.be.equal(monthlySalary);
+    })
+    it('Calculates runway for the given token', async () => {
+      const t1 = await tokenPayroll.calculateTokenPayrollRunway(token1.address);
+      // 365 * 10 - see beforeEach yearlySalary * 10
+      t1.should.be.bignumber.equal(365 * 10);
+    })
+    it('Runs off with the tokens and money (scape hatch)', async () => {
+      const befBal1 = await token1.balanceOf(creator);
+      const befBal2 = await token2.balanceOf(creator);
+
+      await tokenPayroll.tokenScapeHatch();
+
+      const aftBal1 = await token1.balanceOf(creator);
+      const aftBal2 = await token2.balanceOf(creator);
+
+      aftBal1.should.be.bignumber.gt(befBal1);
+      aftBal2.should.be.bignumber.gt(befBal2);
     })
   })
 })

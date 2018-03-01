@@ -1,8 +1,8 @@
 pragma solidity ^0.4.19;
 
-import './payroll/TokenPayroll.sol';
+import './payroll/Payroll.sol';
 
-contract ANTPayroll is TokenPayroll {
+contract ANTPayroll is Payroll {
 
   function ANTPayroll(address oracleAddress) {
     _oracle = oracleAddress;
