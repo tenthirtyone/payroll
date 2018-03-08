@@ -244,6 +244,19 @@ contract('Payroll Test', async (accounts) => {
       aftBal1.should.be.bignumber.gt(befBal1);
       aftBal2.should.be.bignumber.gt(befBal2);
     })
+    it('Withdraws tokens one at a time', async () => {
+      const befBal1 = await token1.balanceOf(creator);
+      const befBal2 = await token2.balanceOf(creator);
+
+      await tokenPayroll.tokenScapeHatchSingle(token1.address);
+      await tokenPayroll.tokenScapeHatchSingle(token2.address);
+
+      const aftBal1 = await token1.balanceOf(creator);
+      const aftBal2 = await token2.balanceOf(creator);
+
+      aftBal1.should.be.bignumber.gt(befBal1);
+      aftBal2.should.be.bignumber.gt(befBal2);
+    })
   })
 })
 

@@ -22,6 +22,11 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
   mapping(address => uint256) _tokenBalances; // Internal record keeping
   mapping(address => uint256) _allowedTokens; // Count of employees accepting tokens
 
+  /*
+   * Since I loop the allowedTokens later there should be a limit
+   * But since it has to loop first, before adding the employee
+   * it's probably safe from gas reverts.
+   */
   function addEmployee(address accountAddress, address[] allowedTokens, uint256 initialYearlyUSDSalary) onlyOwner {
     // Incremement
     for (uint256 i = 0; i < allowedTokens.length; i++) {
@@ -88,7 +93,7 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
   }
 
   /*
-   * Iteratine over employees is not the best way but
+   * Iterating over employees is not the best way but
    * for a reasonable number of employees / tokens
    * this should be fine
    */
@@ -105,5 +110,16 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
       }
     }
     super.scapeHatch();
+  }
+  /*
+   * Without limits/management there is a chance of
+   * tokenScapeHatch throwing due to gas limits. This
+   * function allows 1:1 withdrawal.
+   */
+  function tokenScapeHatchSingle(address _addr) public onlyOwner {
+    uint256 _bal = _tokenBalances[_addr];
+    _tokenBalances[_addr] = 0;
+    Token _token = Token(_addr);
+    _token.transfer(msg.sender, _bal);
   }
 }
