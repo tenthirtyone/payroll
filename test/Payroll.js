@@ -60,6 +60,8 @@ contract('Payroll Test', async (accounts) => {
     it('Sets an employee salary', async () => {
       await payroll.setEmployeeSalary(0, 5000);
 
+      await assertRevert(payroll.setEmployeeSalary(100, 5000));
+
       const emp = await payroll.getEmployee(0);
 
       emp[1].should.be.bignumber.equal(5000);

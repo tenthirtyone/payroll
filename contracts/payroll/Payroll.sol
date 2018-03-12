@@ -35,20 +35,32 @@ contract Payroll is Ownable {
 
   // If a user is removed/added back we reactive their account.
   function addEmployee(address accountAddress, address[] allowedTokens, uint256 initialYearlyUSDSalary) onlyOwner {
-    Employee memory _employee = Employee({
-      accountAddress: accountAddress,
-      allowedTokens: allowedTokens,
-      yearlyUSDSalary: initialYearlyUSDSalary,
-      nextPayday: block.timestamp + oneMonth,
-      active: true
-    });
+    // Address is new or returning.
+    if (!_isEmployee[accountAddress]) {
+      Employee memory _employee = Employee({
+        accountAddress: accountAddress,
+        allowedTokens: allowedTokens,
+        yearlyUSDSalary: initialYearlyUSDSalary,
+        nextPayday: block.timestamp + oneMonth,
+        active: true
+      });
 
-    _employees.push(_employee);
-    _isEmployee[accountAddress] = true;
+      _employees.push(_employee);
+      _isEmployee[accountAddress] = true;
+    } else {
+      uint256 empId = addressToId[accountAddress];
+      // Employee must be inactive.
+      require(_employees[empId].active == false);
+      _employees[empId].allowedTokens = allowedTokens;
+      _employees[empId].nextPayday = block.timestamp + oneMonth;
+      _employees[empId].active = true;
+    }
+
     _totalPay += initialYearlyUSDSalary;
   }
 
   function setEmployeeSalary(uint256 employeeId, uint256 yearlyUSDSalary) onlyOwner {
+    require(employeeId < _employees.length);
     _totalPay -= _employees[employeeId].yearlyUSDSalary;
     _totalPay += yearlyUSDSalary;
     _employees[employeeId].yearlyUSDSalary = yearlyUSDSalary;
@@ -58,7 +70,6 @@ contract Payroll is Ownable {
     _totalPay -= _employees[employeeId].yearlyUSDSalary;
 
     _employees[employeeId].active = false;
-    _isEmployee[_employees[employeeId].accountAddress] = false;
   }
 
   function addFunds() payable onlyOwner {
