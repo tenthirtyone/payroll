@@ -11,7 +11,7 @@ contract PayrollInterface {
 
   function addFunds() payable;
   function scapeHatch();
-  function addTokenFunds() // Use approveAndCall or ERC223 tokenFallback
+  function tokenFallback(); // Use approveAndCall or ERC223 tokenFallback
 
   function getEmployeeCount() constant returns (uint256);
   function getEmployee(uint256 employeeId) constant returns (address employee); // Return all important info too

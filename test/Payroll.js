@@ -22,8 +22,8 @@ contract('Payroll Test', async (accounts) => {
   let token2 = await TokenERC20.new(10 * 10e28, 'Token 2', 'Tkn2');
   let token3 = await TokenERC20.new(10 * 10e28, 'Token 3', 'Tkn3');
 
-  const oneContractMonth = 2592000;
-  const oneMonth = 2592000;
+  const oneContractMonth = 2628000;
+
   const [creator, user, anotherUser, oracle, mallory] = accounts
 
   // Token USD Exchange Rates
@@ -33,8 +33,7 @@ contract('Payroll Test', async (accounts) => {
   const tknExchange3 = 100;
 
   const seedFund = 1000 * 10e18; // Eth seed fund
-
-  const yearlySalary = 100 * 10e18; // Salary in USD
+  const yearlySalary = 100 * 10e18; // 100 Salary in Eth
 
   const fromOracle = {
     from: oracle
@@ -110,13 +109,23 @@ contract('Payroll Test', async (accounts) => {
       emp[0].should.be.equal(creator);
     })
     it('Calculates the burn rate', async () => {
-      await payroll.addEmployee(user, [user, anotherUser], yearlySalary*11);
+      let burnRate = await payroll.calculatePayrollBurnrate();
+      burnRate = burnRate.toNumber();
+      burnRate.should.be.equal(yearlySalary / 12);
+
+      // Add a second user
+      await payroll.addEmployee(user, [user, anotherUser], yearlySalary);
+      burnRate = await payroll.calculatePayrollBurnrate();
+      burnRate = burnRate.toNumber();
+      burnRate.should.be.equal(2*yearlySalary / 12);
+      // Add a third user but remove them
       await payroll.addEmployee(anotherUser, [user, anotherUser], yearlySalary);
       await payroll.removeEmployee(2);
 
-      const burnRate = await payroll.calculatePayrollBurnrate();
+      burnRate = await payroll.calculatePayrollBurnrate();
+      burnRate = burnRate.toNumber();
+      burnRate.should.be.equal(2 * yearlySalary / 12);
 
-      burnRate.should.be.bignumber.equal(yearlySalary);
     })
     it('Calculates the runway', async () => {
       let runway = await payroll.calculatePayrollRunway();
@@ -137,13 +146,15 @@ contract('Payroll Test', async (accounts) => {
     })
 
     it('Calls the payday function after 30 days', async () => {
-      await increaseTimeTo(Date.now() + duration.days(30));
+      await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth));
       let emp = await payroll.getEmployee(0);
       const lastPayday = emp[2].toNumber()
 
       const oldBalance = await web3.eth.getBalance(creator);
 
       await payroll.payday();
+
+      await assertRevert(payroll.payday());
 
       const newBalance = await web3.eth.getBalance(creator);
 
@@ -158,12 +169,15 @@ contract('Payroll Test', async (accounts) => {
       await assertRevert(payroll.payday());
     })
     it('Time Travels three months and calls payday three times', async () => {
-      // 120 Because of the 30 days above + 90 for three months
-      await increaseTimeTo(Date.now() + duration.days(120));
+      // +4 because we went ahead a month above.
+      await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth * 4));
+      let emp = await payroll.getEmployee(0);
 
       await payroll.payday();
       await payroll.payday();
       await payroll.payday();
+      emp = await payroll.getEmployee(0);
+
       await assertRevert(payroll.payday());
     })
   })
@@ -216,7 +230,7 @@ contract('Payroll Test', async (accounts) => {
       await assertRevert(token3.transferToContract(tokenPayroll.address, 10000, ''));
     })
     it('Pays out tokens on payday', async () => {
-      await increaseTimeTo(Date.now() + duration.days(150));
+      await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth * 5));
 
       const balanceBefore = await token2.balanceOf(mallory);
       await tokenPayroll.tokenPayday(token2.address, {from: mallory});

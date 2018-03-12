@@ -8,6 +8,7 @@ contract Payroll is Ownable {
 
   address _oracle;
   uint256 public _balance;
+  uint256 public _totalPay;
   mapping(address => uint256) _exchangeRates;
   mapping(address => bool) _isEmployee;
   mapping(address => uint256) addressToId;
@@ -32,6 +33,7 @@ contract Payroll is Ownable {
     _;
   }
 
+  // If a user is removed/added back we reactive their account.
   function addEmployee(address accountAddress, address[] allowedTokens, uint256 initialYearlyUSDSalary) onlyOwner {
     Employee memory _employee = Employee({
       accountAddress: accountAddress,
@@ -43,13 +45,18 @@ contract Payroll is Ownable {
 
     _employees.push(_employee);
     _isEmployee[accountAddress] = true;
+    _totalPay += initialYearlyUSDSalary;
   }
 
   function setEmployeeSalary(uint256 employeeId, uint256 yearlyUSDSalary) onlyOwner {
+    _totalPay -= _employees[employeeId].yearlyUSDSalary;
+    _totalPay += yearlyUSDSalary;
     _employees[employeeId].yearlyUSDSalary = yearlyUSDSalary;
   }
 
   function removeEmployee(uint256 employeeId) onlyOwner {
+    _totalPay -= _employees[employeeId].yearlyUSDSalary;
+
     _employees[employeeId].active = false;
     _isEmployee[_employees[employeeId].accountAddress] = false;
   }
@@ -76,17 +83,18 @@ contract Payroll is Ownable {
   }
 
   function calculatePayrollBurnrate() constant returns (uint256) {
-    return _totalPay() / 12;
+    return _totalPay / 12;
   }
 
   function calculatePayrollRunway() constant returns (uint256) {
     uint256 ethExchange = _exchangeRates[this];
-    return (_balance * ethExchange) / (_totalPay() / 365);
+    return (_balance * ethExchange) / (_totalPay / 365);
   }
 
   /*
    * Pays out contract balance in Ether based on USD exchange rate
    **/
+   // Remove addressToID, accept empId, check address there.
   function payday() public onlyEmployee {
     uint256 employeeId = addressToId[msg.sender];
     uint256 nextPayday = _employees[employeeId].nextPayday;
@@ -108,17 +116,5 @@ contract Payroll is Ownable {
   // Additional functions
   function getExchangeRate(address token) public view returns (uint256) {
     return _exchangeRates[token];
-  }
-
-  // Change to a
-  function _totalPay() internal constant returns (uint256) {
-    uint256 totalPay = 0;
-
-    for (uint256 i = 0; i < _employees.length; i++) {
-      if (_employees[i].active == true) {
-        totalPay += _employees[i].yearlyUSDSalary;
-      }
-    }
-    return totalPay;
   }
 }

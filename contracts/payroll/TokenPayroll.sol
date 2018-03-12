@@ -12,7 +12,6 @@ contract ERC223ReceivingContract {
  */
   function tokenFallback(address from, uint value, bytes data);
 }
-
 contract Token {
     mapping (address => uint256) public balanceOf;
     function transfer(address _to, uint256 _value);
@@ -89,7 +88,7 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
 
   function calculateTokenPayrollRunway(address token) constant returns (uint256) {
     uint256 exchange = _exchangeRates[token];
-    return (_tokenBalances[token] * exchange) / (_totalPay() / 365);
+    return (_tokenBalances[token] * exchange) / (_totalPay / 365);
   }
 
   /*
