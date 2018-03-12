@@ -4,14 +4,15 @@ import './PayrollInterface.sol';
 import '../util/Ownable.sol';
 
 contract Payroll is Ownable {
-  address _oracle;
   Employee[] public _employees;
+
+  address _oracle;
   uint256 public _balance;
   mapping(address => uint256) _exchangeRates;
   mapping(address => bool) _isEmployee;
   mapping(address => uint256) addressToId;
 
-  uint256 oneMonth = 30 days;
+  uint256 oneMonth = 365 days / 12;
 
   struct Employee {
     address accountAddress;
@@ -61,10 +62,11 @@ contract Payroll is Ownable {
     selfdestruct(msg.sender);
   }
 
+  // Employee Zero?
   function getEmployeeCount() constant returns (uint256) {
     return _employees.length;
   }
-
+  // Remove tokens, track tokens separately
   function getEmployee(uint256 employeeId) constant returns (address employee, uint256 yearlyUSDSalary, uint256 nextPayday, bool active) {
     Employee storage _employee = _employees[employeeId];
     employee = address(_employee.accountAddress);
@@ -108,7 +110,7 @@ contract Payroll is Ownable {
     return _exchangeRates[token];
   }
 
-
+  // Change to a
   function _totalPay() internal constant returns (uint256) {
     uint256 totalPay = 0;
 

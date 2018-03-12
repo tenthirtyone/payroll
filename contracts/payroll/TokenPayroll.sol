@@ -95,7 +95,7 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
   /*
    * Iterating over employees is not the best way but
    * for a reasonable number of employees / tokens
-   * this should be fine
+   * this should be fine. Not wild over N^2
    */
   function tokenScapeHatch() public onlyOwner {
     for (uint256 i = 0; i < _employees.length; i++) {

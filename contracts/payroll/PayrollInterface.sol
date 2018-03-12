@@ -11,7 +11,7 @@ contract PayrollInterface {
 
   function addFunds() payable;
   function scapeHatch();
-  // function addTokenFunds()? // Use approveAndCall or ERC223 tokenFallback
+  function addTokenFunds() // Use approveAndCall or ERC223 tokenFallback
 
   function getEmployeeCount() constant returns (uint256);
   function getEmployee(uint256 employeeId) constant returns (address employee); // Return all important info too
@@ -20,6 +20,7 @@ contract PayrollInterface {
   function calculatePayrollRunway() constant returns (uint256); // Days until the contract can run out of funds
 
   /* EMPLOYEE ONLY */
+  // I forgot this one
   function determineAllocation(address[] tokens, uint256[] distribution); // only callable once every 6 months
   function payday(); // only callable once a month
 
