@@ -61,12 +61,14 @@ contract Payroll is Ownable {
 
   function setEmployeeSalary(uint256 employeeId, uint256 yearlyUSDSalary) onlyOwner {
     require(employeeId < _employees.length);
+    require(_employees[employeeId].active == true);
     _totalPay -= _employees[employeeId].yearlyUSDSalary;
     _totalPay += yearlyUSDSalary;
     _employees[employeeId].yearlyUSDSalary = yearlyUSDSalary;
   }
 
   function removeEmployee(uint256 employeeId) onlyOwner {
+    require(_employees[employeeId].active == true);
     _totalPay -= _employees[employeeId].yearlyUSDSalary;
 
     _employees[employeeId].active = false;
