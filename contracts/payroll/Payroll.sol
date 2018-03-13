@@ -16,11 +16,11 @@ contract Payroll is Ownable {
   uint256 oneMonth = 365 days / 12;
 
   struct Employee {
-    address accountAddress;
-    address[] allowedTokens;
     uint256 yearlyUSDSalary;
     uint256 nextPayday;
+    address accountAddress;
     bool active;
+    address[] allowedTokens;
   }
 
   modifier onlyOracle() {
@@ -100,6 +100,8 @@ contract Payroll is Ownable {
   }
 
   function calculatePayrollRunway() constant returns (uint256) {
+    reuire(_balance > 0);
+    require(_totalPay > 0);
     uint256 ethExchange = _exchangeRates[this];
     return (_balance * ethExchange) / (_totalPay / 365);
   }

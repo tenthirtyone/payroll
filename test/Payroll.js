@@ -2,7 +2,7 @@ import { increaseTimeTo, duration } from './helpers/increaseTime';
 import assertRevert, { assertError } from './helpers/assertRevert'
 
 const BigNumber = web3.BigNumber
-const ANTPayroll = artifacts.require('ANTTokenPayroll')
+const ANTPayroll = artifacts.require('ANTPayroll')
 const ANTTokenPayroll = artifacts.require('ANTTokenPayroll')
 const TokenERC20 = artifacts.require('TokenERC20')
 
@@ -55,15 +55,16 @@ contract('Payroll Test', async (accounts) => {
     it('Adds a new employee', async () => {
       const emp = await payroll._employees(0);
 
-      emp[0].should.be.equal(creator);
+      emp[2].should.be.equal(creator);
     })
+
     it('Sets an employee salary', async () => {
       await payroll.setEmployeeSalary(0, 5000);
 
       await assertRevert(payroll.setEmployeeSalary(100, 5000));
 
       const emp = await payroll.getEmployee(0);
-
+      console.log(emp)
       emp[1].should.be.bignumber.equal(5000);
     })
     it('Removes an employee (set inactive)', async () => {
@@ -72,6 +73,15 @@ contract('Payroll Test', async (accounts) => {
       const emp = await payroll.getEmployee(0);
 
       emp[3].should.be.equal(false);
+    })
+    it('Cannot add the same employee twice', async () => {
+      await assertRevert(payroll.addEmployee(creator, [token2.address, token3.address], yearlySalary));
+    })
+    it('Reactivates an employee', async () => {
+      await payroll.removeEmployee(0);
+      await payroll.addEmployee(creator, [token2.address, token3.address], yearlySalary);
+
+      const emp = await payroll.getEmployee(0);
     })
     it('Adds funds to the contract', async () => {
       await payroll.addFunds({ value: seedFund });
