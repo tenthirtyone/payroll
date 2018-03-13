@@ -65,8 +65,8 @@ contract TokenPayroll is Payroll, ERC223ReceivingContract {
    * I tried overloading the payday function. It compiled but truffle won't
    * test it
    */
-  function tokenPayday(address token) public onlyEmployee {
-    uint256 employeeId = addressToId[msg.sender];
+  function tokenPayday(uint256 employeeId, address token) public onlyEmployee {
+    require(_employees[employeeId].accountAddress == msg.sender);
     uint256 nextPayday = _employees[employeeId].nextPayday;
     uint256 currentDay = block.timestamp;
 

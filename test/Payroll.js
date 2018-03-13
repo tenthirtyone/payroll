@@ -57,31 +57,55 @@ contract('Payroll Test', async (accounts) => {
 
       emp[2].should.be.equal(creator);
     })
+    it('Total pay is new employee pay', async () => {
+      const totalPay = await payroll._totalPay();
 
+      totalPay.should.be.bignumber.equal(yearlySalary);
+    })
+    it('Checks if the employee exists', async () => {
+      const exists = await payroll.isEmployee(creator);
+      exists.should.be.equal(true);
+    })
     it('Sets an employee salary', async () => {
       await payroll.setEmployeeSalary(0, 5000);
 
       await assertRevert(payroll.setEmployeeSalary(100, 5000));
 
       const emp = await payroll.getEmployee(0);
-      console.log(emp)
       emp[1].should.be.bignumber.equal(5000);
+
+      const totalPay = await payroll._totalPay();
+      totalPay.should.be.bignumber.equal(5000);
     })
-    it('Removes an employee (set inactive)', async () => {
+    it('Removes an employee', async () => {
       await payroll.removeEmployee(0);
 
       const emp = await payroll.getEmployee(0);
 
-      emp[3].should.be.equal(false);
+      emp[1].should.be.bignumber.equal(0);
+
+      const exists = await payroll.isEmployee(creator);
+      exists.should.be.equal(false);
+
+      const totalPay = await payroll._totalPay();
+      totalPay.should.be.bignumber.equal(0);
     })
     it('Cannot add the same employee twice', async () => {
       await assertRevert(payroll.addEmployee(creator, [token2.address, token3.address], yearlySalary));
     })
-    it('Reactivates an employee', async () => {
+    it('Cannot remove the same employee twice', async () => {
+      let emp0 = await payroll.getEmployee(0);
+
+      await payroll.removeEmployee(0);
+      await assertRevert(payroll.removeEmployee(0));
+    })
+    it('Adds an old employee', async () => {
       await payroll.removeEmployee(0);
       await payroll.addEmployee(creator, [token2.address, token3.address], yearlySalary);
 
-      const emp = await payroll.getEmployee(0);
+      const emp = await payroll.getEmployee(1);
+
+      emp[0].should.be.equal(creator);
     })
     it('Adds funds to the contract', async () => {
       await payroll.addFunds({ value: seedFund });
@@ -137,7 +161,6 @@ contract('Payroll Test', async (accounts) => {
       burnRate = await payroll.calculatePayrollBurnrate();
       burnRate = burnRate.toNumber();
       burnRate.should.be.equal(2 * yearlySalary / 12);
-
     })
     it('Calculates the runway', async () => {
       let runway = await payroll.calculatePayrollRunway();
@@ -160,13 +183,12 @@ contract('Payroll Test', async (accounts) => {
     it('Calls the payday function after 30 days', async () => {
       await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth));
       let emp = await payroll.getEmployee(0);
+
       const lastPayday = emp[2].toNumber()
 
       const oldBalance = await web3.eth.getBalance(creator);
 
-      await payroll.payday();
-
-      await assertRevert(payroll.payday());
+      await payroll.payday(0);
 
       const newBalance = await web3.eth.getBalance(creator);
 
@@ -178,19 +200,22 @@ contract('Payroll Test', async (accounts) => {
       emp = await payroll.getEmployee(0);
 
       emp[2].should.be.bignumber.equal(lastPayday + oneContractMonth);
-      await assertRevert(payroll.payday());
+      await assertRevert(payroll.payday(0));
+    })
+    it('Cannot call payday before payday', async () => {
+      await assertRevert(payroll.payday(0));
     })
     it('Time Travels three months and calls payday three times', async () => {
       // +4 because we went ahead a month above.
       await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth * 4));
       let emp = await payroll.getEmployee(0);
 
-      await payroll.payday();
-      await payroll.payday();
-      await payroll.payday();
+      await payroll.payday(0);
+      await payroll.payday(0);
+      await payroll.payday(0);
       emp = await payroll.getEmployee(0);
 
-      await assertRevert(payroll.payday());
+      await assertRevert(payroll.payday(0));
     })
   })
 
@@ -245,7 +270,7 @@ contract('Payroll Test', async (accounts) => {
       await increaseTimeTo(Date.now() + duration.seconds(oneContractMonth * 5));
 
       const balanceBefore = await token2.balanceOf(mallory);
-      await tokenPayroll.tokenPayday(token2.address, {from: mallory});
+      await tokenPayroll.tokenPayday(0, token2.address, {from: mallory});
       const balanceAfter = await token2.balanceOf(mallory);
 
       const monthlySalary = Math.round(yearlySalary / tknExchange2 / 12);
